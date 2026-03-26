@@ -2,14 +2,15 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const mysql = require('mysql2');
+const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
 
 const app = express();
 
-// Middlewares
 app.use(cors());
 app.use(express.json());
 
-// Conexión a MySQL (Railway)
+//Conexión MySQL
 const db = mysql.createConnection({
   host: process.env.DB_HOST,
   user: process.env.DB_USER,
@@ -29,22 +30,93 @@ db.connect(err => {
   }
 });
 
-// Ruta de prueba
+//Ruta base
 app.get('/', (req, res) => {
   res.send('API funcionando 🚀');
 });
 
-// Obtener usuarios
-app.get('/usuarios', (req, res) => {
-  db.query('SELECT * FROM T_Usuario', (err, results) => {
+
+//REGISTER
+app.post('/register', async (req, res) => {
+  try {
+    const { usuario, nombre, correo, password, telefono } = req.body;
+
+    // Encriptar contraseña
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    const sql = `
+      INSERT INTO T_Usuario (Usuario, Nombre, Correo, Contraseña, Telefono)
+      VALUES (?, ?, ?, ?, ?)
+    `;
+
+    db.query(
+      sql,
+      [usuario, nombre, correo, hashedPassword, telefono],
+      (err, result) => {
+        if (err) {
+          return res.status(500).json({
+            mensaje: 'Error al registrar',
+            error: err
+          });
+        }
+
+        res.json({
+          mensaje: 'Usuario registrado correctamente'
+        });
+      }
+    );
+
+  } catch (error) {
+    res.status(500).json({ mensaje: 'Error servidor' });
+  }
+});
+
+
+//LOGIN
+app.post('/login', (req, res) => {
+  const { correo, password } = req.body;
+
+  const sql = `SELECT * FROM T_Usuario WHERE Correo = ?`;
+
+  db.query(sql, [correo], async (err, results) => {
     if (err) {
-      return res.status(500).json(err);
+      return res.status(500).json({ mensaje: 'Error servidor' });
     }
-    res.json(results);
+
+    if (results.length === 0) {
+      return res.status(401).json({ mensaje: 'Usuario no encontrado' });
+    }
+
+    const user = results[0];
+
+    // Comparar contraseña
+    const validPassword = await bcrypt.compare(password, user.Contraseña);
+
+    if (!validPassword) {
+      return res.status(401).json({ mensaje: 'Contraseña incorrecta' });
+    }
+
+    // Generar token
+    const token = jwt.sign(
+      { id: user.ID_Usuario },
+      process.env.JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+
+    res.json({
+      mensaje: 'Login exitoso',
+      token,
+      usuario: {
+        ID_Usuario: user.ID_Usuario,
+        Usuario: user.Usuario,
+        Correo: user.Correo
+      }
+    });
   });
 });
 
-// Puerto dinámico (IMPORTANTE para Railway)
+
+//PUERTO (Railway)
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
