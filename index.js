@@ -31,61 +31,45 @@ app.get('/', (req, res) => {
 });
 
 
-// 🔥 REGISTER
-app.post('/register', (req, res) => {
-  const { usuario, nombre, correo, password, telefono } = req.body;
+// 🔥 REGISTER (async/await)
+app.post('/register', async (req, res) => {
+  try {
+    const { usuario, nombre, correo, password, telefono } = req.body;
 
-  if (!usuario || !nombre || !correo || !password) {
-    return res.status(400).json({ mensaje: 'Faltan datos' });
-  }
-
-  bcrypt.hash(password, 10, (err, hashedPassword) => {
-    if (err) {
-      console.error('❌ ERROR HASH:', err);
-      return res.status(500).json({ mensaje: 'Error al encriptar' });
+    if (!usuario || !nombre || !correo || !password) {
+      return res.status(400).json({ mensaje: 'Faltan datos' });
     }
 
-    const sql = `
-      INSERT INTO T_Usuario (Usuario, Nombre, Correo, Contraseña, Telefono)
-      VALUES (?, ?, ?, ?, ?)
-    `;
+    const hashedPassword = await bcrypt.hash(password, 10);
 
-    db.query(
-      sql,
-      [usuario, nombre, correo, hashedPassword, telefono],
-      (err, result) => {
-        if (err) {
-          console.error('❌ ERROR REGISTER:', err);
-          return res.status(500).json({
-            mensaje: 'Error al registrar',
-            error: err
-          });
-        }
-
-        res.json({
-          mensaje: 'Usuario registrado correctamente'
-        });
-      }
+    await db.promise().query(
+      `INSERT INTO T_Usuario (Usuario, Nombre, Correo, Contraseña, Telefono)
+       VALUES (?, ?, ?, ?, ?)`,
+      [usuario, nombre, correo, hashedPassword, telefono]
     );
-  });
+
+    res.json({ mensaje: 'Usuario registrado correctamente' });
+
+  } catch (error) {
+    console.error('❌ ERROR REGISTER:', error);
+    res.status(500).json({ mensaje: 'Error al registrar', error });
+  }
 });
 
 
-// 🔐 LOGIN (CORREGIDO)
-app.post('/login', (req, res) => {
-  const { correo, password } = req.body;
+// 🔐 LOGIN (100% estable)
+app.post('/login', async (req, res) => {
+  try {
+    const { correo, password } = req.body;
 
-  if (!correo || !password) {
-    return res.status(400).json({ mensaje: 'Faltan datos' });
-  }
-
-  const sql = `SELECT * FROM T_Usuario WHERE Correo = ?`;
-
-  db.query(sql, [correo], (err, results) => {
-    if (err) {
-      console.error('❌ ERROR LOGIN QUERY:', err);
-      return res.status(500).json({ mensaje: 'Error servidor' });
+    if (!correo || !password) {
+      return res.status(400).json({ mensaje: 'Faltan datos' });
     }
+
+    const [results] = await db.promise().query(
+      'SELECT * FROM T_Usuario WHERE Correo = ?',
+      [correo]
+    );
 
     if (results.length === 0) {
       return res.status(401).json({ mensaje: 'Usuario no encontrado' });
@@ -93,34 +77,34 @@ app.post('/login', (req, res) => {
 
     const user = results[0];
 
-    // 🔥 bcrypt con callback (NO async/await)
-    bcrypt.compare(password, user.Contraseña, (err, isMatch) => {
-      if (err) {
-        console.error('❌ ERROR BCRYPT:', err);
-        return res.status(500).json({ mensaje: 'Error en contraseña' });
+    console.log('Usuario encontrado:', user.Correo);
+
+    const validPassword = await bcrypt.compare(password, user.Contraseña);
+
+    if (!validPassword) {
+      return res.status(401).json({ mensaje: 'Contraseña incorrecta' });
+    }
+
+    const token = jwt.sign(
+      { id: user.ID_Usuario },
+      process.env.JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+
+    res.json({
+      mensaje: 'Login exitoso',
+      token,
+      usuario: {
+        ID_Usuario: user.ID_Usuario,
+        Usuario: user.Usuario,
+        Correo: user.Correo
       }
-
-      if (!isMatch) {
-        return res.status(401).json({ mensaje: 'Contraseña incorrecta' });
-      }
-
-      const token = jwt.sign(
-        { id: user.ID_Usuario },
-        process.env.JWT_SECRET,
-        { expiresIn: '7d' }
-      );
-
-      res.json({
-        mensaje: 'Login exitoso',
-        token,
-        usuario: {
-          ID_Usuario: user.ID_Usuario,
-          Usuario: user.Usuario,
-          Correo: user.Correo
-        }
-      });
     });
-  });
+
+  } catch (error) {
+    console.error('❌ ERROR LOGIN TOTAL:', error);
+    res.status(500).json({ mensaje: 'Error servidor', error });
+  }
 });
 
 
