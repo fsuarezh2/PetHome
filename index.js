@@ -10,8 +10,8 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// 🔌 Conexión MySQL
-const db = mysql.createConnection({
+// 🔥 CONEXIÓN CON POOL (SOLUCIÓN)
+const db = mysql.createPool({
   host: process.env.DB_HOST,
   user: process.env.DB_USER,
   password: process.env.DB_PASSWORD,
@@ -19,16 +19,10 @@ const db = mysql.createConnection({
   port: process.env.DB_PORT,
   ssl: {
     rejectUnauthorized: false
-  }
-});
-
-// 🔥 DEBUG CONEXIÓN
-db.connect(err => {
-  if (err) {
-    console.error('❌ ERROR MYSQL:', err);
-  } else {
-    console.log('✅ Conectado a MySQL');
-  }
+  },
+  waitForConnections: true,
+  connectionLimit: 10,
+  queueLimit: 0
 });
 
 // 🧪 Ruta base
