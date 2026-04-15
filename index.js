@@ -10,8 +10,8 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-//Conexión MySQL
-const db = mysql.createConnection({
+// 🔥 CONEXIÓN MYSQL (POOL)
+const db = mysql.createPool({
   host: process.env.DB_HOST,
   user: process.env.DB_USER,
   password: process.env.DB_PASSWORD,
@@ -19,30 +19,31 @@ const db = mysql.createConnection({
   port: process.env.DB_PORT,
   ssl: {
     rejectUnauthorized: false
-  }
+  },
+  waitForConnections: true,
+  connectionLimit: 10,
+  queueLimit: 0
 });
 
-db.connect(err => {
-  if (err) {
-    console.error('Error de conexión:', err);
-  } else {
-    console.log('Conectado a Railway MySQL');
-  }
-});
-
-//Ruta base
+// 🧪 Ruta base
 app.get('/', (req, res) => {
   res.send('API funcionando 🚀');
 });
 
 
-//REGISTER
-app.post('/register', async (req, res) => {
-  try {
-    const { usuario, nombre, correo, password, telefono } = req.body;
+// 🔥 REGISTER
+app.post('/register', (req, res) => {
+  const { usuario, nombre, correo, password, telefono } = req.body;
 
-    // Encriptar contraseña
-    const hashedPassword = await bcrypt.hash(password, 10);
+  if (!usuario || !nombre || !correo || !password) {
+    return res.status(400).json({ mensaje: 'Faltan datos' });
+  }
+
+  bcrypt.hash(password, 10, (err, hashedPassword) => {
+    if (err) {
+      console.error('❌ ERROR HASH:', err);
+      return res.status(500).json({ mensaje: 'Error al encriptar' });
+    }
 
     const sql = `
       INSERT INTO T_Usuario (Usuario, Nombre, Correo, Contraseña, Telefono)
@@ -54,6 +55,7 @@ app.post('/register', async (req, res) => {
       [usuario, nombre, correo, hashedPassword, telefono],
       (err, result) => {
         if (err) {
+          console.error('❌ ERROR REGISTER:', err);
           return res.status(500).json({
             mensaje: 'Error al registrar',
             error: err
@@ -65,21 +67,23 @@ app.post('/register', async (req, res) => {
         });
       }
     );
-
-  } catch (error) {
-    res.status(500).json({ mensaje: 'Error servidor' });
-  }
+  });
 });
 
 
-//LOGIN
+// 🔐 LOGIN (CORREGIDO)
 app.post('/login', (req, res) => {
   const { correo, password } = req.body;
 
+  if (!correo || !password) {
+    return res.status(400).json({ mensaje: 'Faltan datos' });
+  }
+
   const sql = `SELECT * FROM T_Usuario WHERE Correo = ?`;
 
-  db.query(sql, [correo], async (err, results) => {
+  db.query(sql, [correo], (err, results) => {
     if (err) {
+      console.error('❌ ERROR LOGIN QUERY:', err);
       return res.status(500).json({ mensaje: 'Error servidor' });
     }
 
@@ -89,34 +93,38 @@ app.post('/login', (req, res) => {
 
     const user = results[0];
 
-    // Comparar contraseña
-    const validPassword = await bcrypt.compare(password, user.Contraseña);
-
-    if (!validPassword) {
-      return res.status(401).json({ mensaje: 'Contraseña incorrecta' });
-    }
-
-    // Generar token
-    const token = jwt.sign(
-      { id: user.ID_Usuario },
-      process.env.JWT_SECRET,
-      { expiresIn: '7d' }
-    );
-
-    res.json({
-      mensaje: 'Login exitoso',
-      token,
-      usuario: {
-        ID_Usuario: user.ID_Usuario,
-        Usuario: user.Usuario,
-        Correo: user.Correo
+    // 🔥 bcrypt con callback (NO async/await)
+    bcrypt.compare(password, user.Contraseña, (err, isMatch) => {
+      if (err) {
+        console.error('❌ ERROR BCRYPT:', err);
+        return res.status(500).json({ mensaje: 'Error en contraseña' });
       }
+
+      if (!isMatch) {
+        return res.status(401).json({ mensaje: 'Contraseña incorrecta' });
+      }
+
+      const token = jwt.sign(
+        { id: user.ID_Usuario },
+        process.env.JWT_SECRET,
+        { expiresIn: '7d' }
+      );
+
+      res.json({
+        mensaje: 'Login exitoso',
+        token,
+        usuario: {
+          ID_Usuario: user.ID_Usuario,
+          Usuario: user.Usuario,
+          Correo: user.Correo
+        }
+      });
     });
   });
 });
 
 
-//PUERTO (Railway)
+// 🚀 PUERTO (Railway)
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
