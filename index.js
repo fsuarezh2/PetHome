@@ -10,8 +10,8 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// 🔥 CONEXIÓN CON POOL (SOLUCIÓN)
-const db = mysql.createPool({
+//Conexión MySQL
+const db = mysql.createConnection({
   host: process.env.DB_HOST,
   user: process.env.DB_USER,
   password: process.env.DB_PASSWORD,
@@ -19,27 +19,29 @@ const db = mysql.createPool({
   port: process.env.DB_PORT,
   ssl: {
     rejectUnauthorized: false
-  },
-  waitForConnections: true,
-  connectionLimit: 10,
-  queueLimit: 0
+  }
 });
 
-// 🧪 Ruta base
+db.connect(err => {
+  if (err) {
+    console.error('Error de conexión:', err);
+  } else {
+    console.log('Conectado a Railway MySQL');
+  }
+});
+
+//Ruta base
 app.get('/', (req, res) => {
   res.send('API funcionando 🚀');
 });
 
 
-// 🔥 REGISTER
+//REGISTER
 app.post('/register', async (req, res) => {
   try {
     const { usuario, nombre, correo, password, telefono } = req.body;
 
-    if (!usuario || !nombre || !correo || !password) {
-      return res.status(400).json({ mensaje: 'Faltan datos' });
-    }
-
+    // Encriptar contraseña
     const hashedPassword = await bcrypt.hash(password, 10);
 
     const sql = `
@@ -52,7 +54,6 @@ app.post('/register', async (req, res) => {
       [usuario, nombre, correo, hashedPassword, telefono],
       (err, result) => {
         if (err) {
-          console.error('❌ ERROR REGISTER:', err);
           return res.status(500).json({
             mensaje: 'Error al registrar',
             error: err
@@ -66,25 +67,19 @@ app.post('/register', async (req, res) => {
     );
 
   } catch (error) {
-    console.error('❌ ERROR GENERAL REGISTER:', error);
     res.status(500).json({ mensaje: 'Error servidor' });
   }
 });
 
 
-// 🔐 LOGIN
+//LOGIN
 app.post('/login', (req, res) => {
   const { correo, password } = req.body;
-
-  if (!correo || !password) {
-    return res.status(400).json({ mensaje: 'Faltan datos' });
-  }
 
   const sql = `SELECT * FROM T_Usuario WHERE Correo = ?`;
 
   db.query(sql, [correo], async (err, results) => {
     if (err) {
-      console.error('❌ ERROR LOGIN QUERY:', err);
       return res.status(500).json({ mensaje: 'Error servidor' });
     }
 
@@ -94,38 +89,34 @@ app.post('/login', (req, res) => {
 
     const user = results[0];
 
-    try {
-      const validPassword = await bcrypt.compare(password, user.Contraseña);
+    // Comparar contraseña
+    const validPassword = await bcrypt.compare(password, user.Contraseña);
 
-      if (!validPassword) {
-        return res.status(401).json({ mensaje: 'Contraseña incorrecta' });
-      }
-
-      const token = jwt.sign(
-        { id: user.ID_Usuario },
-        process.env.JWT_SECRET,
-        { expiresIn: '7d' }
-      );
-
-      res.json({
-        mensaje: 'Login exitoso',
-        token,
-        usuario: {
-          ID_Usuario: user.ID_Usuario,
-          Usuario: user.Usuario,
-          Correo: user.Correo
-        }
-      });
-
-    } catch (error) {
-      console.error('❌ ERROR BCRYPT:', error);
-      res.status(500).json({ mensaje: 'Error en validación' });
+    if (!validPassword) {
+      return res.status(401).json({ mensaje: 'Contraseña incorrecta' });
     }
+
+    // Generar token
+    const token = jwt.sign(
+      { id: user.ID_Usuario },
+      process.env.JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+
+    res.json({
+      mensaje: 'Login exitoso',
+      token,
+      usuario: {
+        ID_Usuario: user.ID_Usuario,
+        Usuario: user.Usuario,
+        Correo: user.Correo
+      }
+    });
   });
 });
 
 
-// 🚀 PUERTO (Railway)
+//PUERTO (Railway)
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
