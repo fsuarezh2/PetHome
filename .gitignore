@@ -1,0 +1,77 @@
+# Dependencias de Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+yarn.lock
+
+# Variables de entorno y archivos de configuración
+.env
+.env.local
+.env.production
+.env.development
+.env.test
+
+# Editor de código
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Archivos de log
+logs/
+*.log
+log.txt
+
+# Archivos de sistema operativo
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+*.tmp
+
+# Archivos de prueba
+coverage/
+.nyc_output/
+
+# Archivos de build
+dist/
+build/
+*.zip
+*.tar.gz
+
+# Archivos temporales
+*.bak
+*.old
+*.orig
+*.temp
+
+# Railway (si lo usas después)
+railway.json
+.railway/
+
+# Base de datos local (si generas archivos .db)
+*.db
+*.sqlite
+*.sqlite3
+
+# Archivos de respaldo
+*.backup
+*.cache
+
+# Variables de entorno específicas de Windows
+.env.windows
+
+# Archivos de certificados locales (si usas HTTPS)
+*.pem
+*.crt
+*.key
+*.cert
